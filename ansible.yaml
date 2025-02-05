@@ -14,44 +14,27 @@
       impact: "3"
       urgency: "3"
       short_description: "Packet loss detected"
- 
 
   tasks:
-    # - name: Ping the target device
-    #   ansible.builtin.command: >
-    #     {% if ansible_facts['os_family'] == 'Windows' %}
-    #     ping -n 4 {{ item }}
-    #     {% else %}
-    #     ping -c 4 {{ item }}
-    #     {% endif %}
-    #   register: ping_result
-    #   loop: "{{ targets }}"
-    #   ignore_errors: yes
     - name: Ping the target device (Windows)
       ansible.builtin.command: "ping -n 4 {{ item }}"
       register: ping_result
       loop: "{{ targets }}"
       ignore_errors: yes
       when: ansible_facts['os_family'] == "Windows"
- 
+
     - name: Ping the target device (Linux/macOS)
       ansible.builtin.command: "ping -c 4 {{ item }}"
       register: ping_result
       loop: "{{ targets }}"
       ignore_errors: yes
       when: ansible_facts['os_family'] != "Windows"
- 
- 
-    # - name: Print ping output
-    #   ansible.builtin.debug:
-    #     msg: "{{ ping_result.results | map(attribute='stdout') | list }}"
-    - name: Print ping output
-      ansible.builtin.debug:
-        msg: "{{ item.stdout }}"
-      loop: "{{ ping_result.results }}"
+
+    - name: Check if ping was successful
+      set_fact:
+        ping_failed: "{{ ping_result.results | selectattr('rc', 'ne', 0) | list }}"
       when: ping_result.results is defined
- 
- 
+
     - name: Run traceroute if ping fails
       ansible.builtin.command: >
         {% if ansible_facts['os_family'] == 'Windows' %}
@@ -59,16 +42,16 @@
         {% else %}
         traceroute {{ item }}
         {% endif %}
-      when: ping_result is failed
+      when: item in ping_failed
       register: traceroute_result
       loop: "{{ targets }}"
       ignore_errors: yes
- 
+
     - name: Print traceroute output
       ansible.builtin.debug:
         msg: "{{ traceroute_result.results | map(attribute='stdout') | list }}"
       when: traceroute_result is not skipped
- 
+
     - name: Log incident in ServiceNow if packet loss is detected
       ansible.builtin.uri:
         url: "https://{{ service_now.instance }}/api/now/table/{{ service_now.table }}"
@@ -85,6 +68,7 @@
           short_description: "{{ service_now.short_description }}"
           description: "Packet loss detected on {{ item }} at {{ ansible_date_time.iso8601 }}"
         status_code: 201
-      when: ping_result is failed
+      when: item in ping_failed
       loop: "{{ targets }}"
       ignore_errors: yes
+
