@@ -14,10 +14,7 @@
       impact: "3"
       urgency: "3"
       short_description: "Packet loss detected"
- - name: Ping the target device
-  ansible.builtin.ping:
-  delegate_to: "{{ item }}"
-  loop: "{{ targets }}"
+ 
 
   tasks:
     # - name: Ping the target device
